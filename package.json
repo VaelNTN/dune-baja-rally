@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Dune Baja Rally - 2D Physics Off-Road Stunt & Hill-Climb Rally Game",
+  "description": "Dune Baja Rally - 2D Physics Off-Road Stunt Rally Game",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

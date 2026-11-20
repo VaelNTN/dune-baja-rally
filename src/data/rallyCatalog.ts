@@ -1,3 +1,5 @@
+import { Device } from '@capacitor/device';
+
 export interface RallyVehicleDef {
   id: string;
   name: string;
@@ -35,6 +37,9 @@ export interface RallySaveState {
   unlockedVehicles: string[];
   upgrades: Record<string, Record<RallyUpgradeKey, number>>;
   bestDistM: Record<string, number>;
+  muted: boolean;
+  playerName: string;
+  totalFlips: number;
 }
 
 export const RALLY_VEHICLES: RallyVehicleDef[] = [
@@ -80,11 +85,11 @@ export const RALLY_VEHICLES: RallyVehicleDef[] = [
   {
     id: 'lunar_rover',
     name: 'Lunar Jump Crawler',
-    subtitle: 'Low-Gravity Stunt Prototype',
+    subtitle: 'Low-Gravity 6-Wheel Prototype',
     price: 5200,
     bodyColor: '#38bdf8',
     accentColor: '#e0f2fe',
-    wheelRadius: 26,
+    wheelRadius: 24,
     baseTorque: 790,
     baseTopSpeed: 540,
     baseGrip: 1.15,
@@ -135,7 +140,7 @@ export const RALLY_STAGES: RallyStageDef[] = [
   {
     id: 'volcano',
     name: 'Volcano Ridge',
-    subtitle: 'Extreme Climbs & Big Air',
+    subtitle: 'Extreme Ridges & Big Air',
     skyTop: '#18181b',
     skyBot: '#dc2626',
     hillColor: '#450a0a',
@@ -148,13 +153,34 @@ export const RALLY_STAGES: RallyStageDef[] = [
 ];
 
 const KEY = 'dune_baja_rally_save_v1';
+const DEVICE_KEY = 'dbr_device_id_v1';
 
 export function loadRallyState(): RallySaveState {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as RallySaveState;
-      if (parsed && parsed.selectedVehicleId) return parsed;
+      const parsed = JSON.parse(raw) as Partial<RallySaveState>;
+      if (parsed && parsed.selectedVehicleId) {
+        return {
+          coins: Number(parsed.coins) || 0,
+          selectedVehicleId: parsed.selectedVehicleId,
+          selectedStageId: parsed.selectedStageId || RALLY_STAGES[0].id,
+          unlockedVehicles:
+            Array.isArray(parsed.unlockedVehicles) && parsed.unlockedVehicles.length
+              ? parsed.unlockedVehicles
+              : [RALLY_VEHICLES[0].id],
+          upgrades: parsed.upgrades || {
+            [RALLY_VEHICLES[0].id]: { engine: 1, suspension: 1, tires: 1, fuel: 1 },
+          },
+          bestDistM: parsed.bestDistM || {},
+          muted: Boolean(parsed.muted),
+          playerName:
+            typeof parsed.playerName === 'string' && parsed.playerName.trim()
+              ? parsed.playerName.trim().slice(0, 20)
+              : 'BajaDriver',
+          totalFlips: Number(parsed.totalFlips) || 0,
+        };
+      }
     }
   } catch {
     // ignore
@@ -168,11 +194,23 @@ export function loadRallyState(): RallySaveState {
       [RALLY_VEHICLES[0].id]: { engine: 1, suspension: 1, tires: 1, fuel: 1 },
     },
     bestDistM: {},
+    muted: false,
+    playerName: 'BajaDriver',
+    totalFlips: 0,
   };
 }
 
 export function saveRallyState(s: RallySaveState): void {
-  localStorage.setItem(KEY, JSON.stringify(s));
+  try {
+    localStorage.setItem(KEY, JSON.stringify(s));
+  } catch {
+    // ignore
+  }
+}
+
+export function getBestMetersOverall(s: RallySaveState): number {
+  const vals = Object.values(s.bestDistM || {});
+  return vals.length ? Math.max(...vals) : 0;
 }
 
 export function getRallyUpgrades(s: RallySaveState, vehicleId: string): Record<RallyUpgradeKey, number> {
@@ -184,4 +222,31 @@ export function getRallyUpgrades(s: RallySaveState, vehicleId: string): Record<R
 
 export function getRallyUpgradeCost(lvl: number): number {
   return Math.round(180 * Math.pow(1.6, lvl - 1));
+}
+
+export async function getRallyDeviceId(): Promise<string> {
+  try {
+    const cached = localStorage.getItem(DEVICE_KEY);
+    if (cached && cached.length >= 4) return cached;
+  } catch {
+    // ignore
+  }
+  let id = '';
+  try {
+    const info = await Device.getId();
+    if (info?.identifier && info.identifier.length >= 4) {
+      id = `cap_${info.identifier}`;
+    }
+  } catch {
+    // non-native fallback
+  }
+  if (!id) {
+    id = `web_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+  }
+  try {
+    localStorage.setItem(DEVICE_KEY, id);
+  } catch {
+    // ignore
+  }
+  return id;
 }
